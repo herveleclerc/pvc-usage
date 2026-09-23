@@ -49,3 +49,4 @@ cd ../..
 
 echo "Release artifacts ready in ${RELEASES_DIR}:"
 cat "${RELEASES_DIR}/checksums.txt"
+

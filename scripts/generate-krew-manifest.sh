@@ -77,3 +77,4 @@ spec:
 EOF
 
 echo "Updated ${OUTPUT_FILE} with SHA256 checksums for ${VERSION}"
+

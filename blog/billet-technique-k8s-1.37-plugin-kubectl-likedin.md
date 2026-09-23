@@ -1,10 +1,12 @@
-# Disques fantômes et factures astronomiques : dompter la condition Unused de Kubernetes 1.37 avec un plugin kubectl en Go
+# Traquer les PVC orphelins : exploiter la condition Unused de Kubernetes 1.37 avec un plugin kubectl en Go
 
-Sur Kubernetes, la gestion du stockage réseau génère rapidement des surcoûts invisibles. Lorsqu'un pod est supprimé ou qu'un namespace est nettoyé, les `PersistentVolumeClaims` (PVC) restent conservés par défaut. Ce comportement garantit la durabilité des données, mais il entraîne une accumulation de volumes inutilisés, notamment lors de tirs de CI/CD ou sur des environnements d'intégration éphémères.
+Par Hervé Leclerc - Septembre 2026
 
-Jusqu'à présent, vérifier si un PVC était réellement rattaché à une charge de travail active nécessitait de concevoir des scripts complexes croisant l'API des pods et des volumes. La version 1.37 de Kubernetes simplifie ce suivi en faisant passer en Beta le KEP-5541 : `PersistentVolumeClaimUnusedSinceTime`.
+Sur Kubernetes, la gestion du stockage réseau génère rapidement des surcoûts invisibles. Lorsqu'un pod est supprimé ou qu'un namespace est nettoyé, les **PersistentVolumeClaims** (PVC) restent conservés par défaut. Ce comportement garantit la durabilité des données, mais il entraîne une accumulation de volumes inutilisés, notamment lors de tirs de CI/CD ou sur des environnements d'intégration éphémères.
 
-Cet article détaille le fonctionnement de cette nouvelle condition dans l'API Server, le rôle du contrôleur de stockage associé, puis la création pas à pas d'un plugin `kubectl` officiel en Go, distribué via Krew.
+Jusqu'à présent, vérifier si un PVC était réellement rattaché à une charge de travail active nécessitait de concevoir des scripts complexes croisant l'API des pods et des volumes. La version 1.37 de Kubernetes simplifie ce suivi en faisant passer en Beta le KEP-5541 : **PersistentVolumeClaimUnusedSinceTime**.
+
+Cet article détaille le fonctionnement de cette nouvelle condition dans l'API Server, le rôle du contrôleur de stockage associé, puis la création pas à pas d'un plugin **kubectl** officiel en Go, distribué via Krew.
 
 ---
 
@@ -13,8 +15,8 @@ Cet article détaille le fonctionnement de cette nouvelle condition dans l'API S
 Avant Kubernetes 1.37, déterminer l'état d'activité d'un volume persistant imposait de requêter plusieurs ressources du cluster :
 
 1. Lister l'ensemble des pods.
-2. Inspecter les déclarations de volumes dans `.spec.volumes[*].persistentVolumeClaim.claimName`.
-3. Filtrer la phase d'exécution des pods (les pods en état `Succeeded` ou `Completed` conservent leur référence au volume sans monter le disque).
+2. Inspecter les déclarations de volumes dans **.spec.volumes[*].persistentVolumeClaim.claimName**.
+3. Filtrer la phase d'exécution des pods (les pods en état **Succeeded** ou **Completed** conservent leur référence au volume sans monter le disque).
 4. Déduire par soustraction les PVC non rattachés.
 
 Exemple de commande utilisée pour automatiser ce contrôle :
@@ -35,17 +37,17 @@ Cette approche souffre d'une limite majeure : l'absence d'historique d'inactivit
 
 ## 2. Fonctionnement du KEP-5541 et de la condition Unused
 
-Introduite en Alpha en version 1.36, la fonctionnalité `PersistentVolumeClaimUnusedSinceTime` passe en Beta et devient activée par défaut avec Kubernetes 1.37.
+Introduite en Alpha en version 1.36, la fonctionnalité **PersistentVolumeClaimUnusedSinceTime** passe en Beta et devient activée par défaut avec Kubernetes 1.37.
 
 ### Rôle du PVC Protection Controller
 
-La mise à jour de cet état est prise en charge dans le `kube-controller-manager` par le **PVC Protection Controller**.
+La mise à jour de cet état est prise en charge dans le **kube-controller-manager** par le **PVC Protection Controller**.
 
-Ce contrôleur surveillait déjà la relation entre pods et PVC pour positionner le finalizer `kubernetes.io/pvc-protection` et éviter la suppression d'un volume en cours d'utilisation. Maintienant déjà un cache indexé des pods associés à chaque PVC, il a été étendu pour calculer la condition d'usage.
+Ce contrôleur surveillait déjà la relation entre pods et PVC pour positionner le finalizer **kubernetes.io/pvc-protection** et éviter la suppression d'un volume en cours d'utilisation. Maintenant déjà un cache indexé des pods associés à chaque PVC, il a été étendu pour calculer la condition d'usage.
 
 ### Structure de la condition dans l'API
 
-Le champ `.status.conditions` d'un PVC intègre désormais le type `Unused` :
+Le champ **.status.conditions** d'un PVC intègre désormais le type **Unused** :
 
 ```yaml
 status:
@@ -66,26 +68,26 @@ status:
 
 ### Règles de gestion d'état
 
-1. **Pods terminés** : Les pods en phase `Succeeded` ou `Failed` (comme les Jobs nettoyés) ne bloquent pas le passage à `Unused=True`.
-2. **Pods en attente (Pending)** : Un pod non encore planifié manifeste l'intention d'utiliser le volume. Le PVC conserve le statut `Unused=False` avec la raison `PodUsingPVC`.
-3. **Volumes partagés (`ReadWriteMany`)** : Le statut bascule à `Unused=True` uniquement après l'arrêt du dernier pod consommateur.
-4. **Champ `lastTransitionTime**` : Lors du passage à `Unused=True`, ce champ fige l'horodatage exact du début d'inactivité.
+1. **Pods terminés** : Les pods en phase **Succeeded** ou **Failed** (comme les Jobs nettoyés) ne bloquent pas le passage à **Unused=True**.
+2. **Pods en attente (Pending)** : Un pod non encore planifié manifeste l'intention d'utiliser le volume. Le PVC conserve le statut **Unused=False** avec la raison **PodUsingPVC**.
+3. **Volumes partagés (ReadWriteMany)** : Le statut bascule à **Unused=True** uniquement après l'arrêt du dernier pod consommateur.
+4. **Champ lastTransitionTime** : Lors du passage à **Unused=True**, ce champ fige l'horodatage exact du début d'inactivité.
 
 ---
 
 ## 3. Conception d'un plugin kubectl en Go
 
-Plutôt que de manipuler des requêtes JSON complexes, la création d'un binaire respectant les conventions des extensions `kubectl` permet d'intégrer ce suivi directement dans les routines d'exploitation.
+Plutôt que de manipuler des requêtes JSON complexes, la création d'un binaire respectant les conventions des extensions **kubectl** permet d'intégrer ce suivi directement dans les routines d'exploitation.
 
 ### Principes d'intégration
 
-1. **Convention de nommage** : Tout binaire nommé `kubectl-<nom>` disponible dans le `$PATH` système est automatiquement reconnu. La commande `kubectl pvc-usage` exécutera le binaire `kubectl-pvc-usage`.
-2. **Gestion de la configuration** : L'utilisation de la bibliothèque officielle `k8s.io/cli-runtime/pkg/genericclioptions` garantit la prise en charge native des arguments standards (`--kubeconfig`, `--context`, `--namespace`, etc.).
-3. **Arborescence de commandes avec Cobra** : Le paquet `[github.com/spf13/cobra](https://github.com/spf13/cobra)` assure la gestion des flags et de l'aide en ligne.
+1. **Convention de nommage** : Tout binaire nommé **kubectl-** disponible dans le **$PATH** système est automatiquement reconnu. La commande **kubectl pvc-usage** exécutera le binaire **kubectl-pvc-usage**.
+2. **Gestion de la configuration** : L'utilisation de la bibliothèque officielle **k8s.io/cli-runtime/pkg/genericclioptions** garantit la prise en charge native des arguments standards (**--kubeconfig**, **--context**, **--namespace**, etc.).
+3. **Arborescence de commandes avec Cobra** : Le paquet **[github.com/spf13/cobra](https://www.google.com/search?q=https%3A%2F%2Fgithub.com%2Fspf13%2Fcobra)** assure la gestion des flags et de l'aide en ligne.
 
 ---
 
-## 4. Implémentation du plugin `kubectl-pvc-usage`
+## 4. Implémentation du plugin kubectl-pvc-usage
 
 Structure du projet :
 
@@ -117,7 +119,7 @@ pvc-usage/
 
 ```
 
-### 4.1. Configuration de cli-runtime et Cobra (`pkg/cmd/root.go`)
+### 4.1. Configuration de cli-runtime et Cobra (pkg/cmd/root.go)
 
 ```go
 package cmd
@@ -187,7 +189,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 
 ```
 
-### 4.2. Extraction de la condition (`pkg/collector/collector.go`)
+### 4.2. Extraction de la condition (pkg/collector/collector.go)
 
 ```go
 func (c *Collector) evaluatePVC(pvc corev1.PersistentVolumeClaim, now time.Time) types.PVCUsageInfo {
@@ -248,9 +250,9 @@ func (c *Collector) evaluatePVC(pvc corev1.PersistentVolumeClaim, now time.Time)
 
 ```
 
-### 4.3. Support des durées exprimées en jours (`30d`, `7d`)
+### 4.3. Support des durées exprimées en jours (30d, 7d)
 
-La fonction `time.ParseDuration` native de Go ne prenant pas en compte l'unité jour (`d`), le parser a été étendu :
+La fonction **time.ParseDuration** native de Go ne prenant pas en compte l'unité jour (**d**), le parser a été étendu :
 
 ```go
 var dayRegex = regexp.MustCompile(`^(\d+)([dD])$`)
@@ -294,7 +296,7 @@ Active in-use PVCs:    1
 
 ## 5. Compilation multi-plateforme et packaging Krew
 
-### Automation du build (`Makefile`)
+### Automation du build (Makefile)
 
 ```makefile
 PLATFORMS := \
@@ -317,7 +319,7 @@ build-all:
 
 ```
 
-### Manifeste Krew (`krew.yaml`)
+### Manifeste Krew (krew.yaml)
 
 ```yaml
 apiVersion: krew.googlecontainertools.github.com/v1alpha2
@@ -375,15 +377,15 @@ kubectl krew install herveleclerc/pvc-usage
 
 ## 6. Gestion des versions et rétrocompatibilité
 
-Le binaire client `kubectl-pvc-usage` fonctionne indépendamment de la version locale de `kubectl`. En revanche, les données extraites dépendent directement de la version du plan de contrôle :
+Le binaire client **kubectl-pvc-usage** fonctionne indépendamment de la version locale de **kubectl**. En revanche, les données extraites dépendent directement de la version du plan de contrôle :
 
 * **Kubernetes < 1.36** : Condition non gérée par le contrôleur.
-* **Kubernetes 1.36 (Alpha)** : Requiert l'activation explicite du drapeau `--feature-gates="PersistentVolumeClaimUnusedSinceTime=true"` sur le `kube-controller-manager`.
+* **Kubernetes 1.36 (Alpha)** : Requiert l'activation explicite du drapeau **--feature-gates="PersistentVolumeClaimUnusedSinceTime=true"** sur le **kube-controller-manager**.
 * **Kubernetes 1.37+ (Beta)** : Activé par défaut.
 
-### Vérification de compatibilité (`pkg/versioncheck`)
+### Vérification de compatibilité (pkg/versioncheck)
 
-Le plugin interroge l'endpoint `/version` de l'API Server pour ajuster l'affichage et éviter les interprétations erronées sur des clusters plus anciens :
+Le plugin interroge l'endpoint **/version** de l'API Server pour ajuster l'affichage et éviter les interprétations erronées sur des clusters plus anciens :
 
 ```go
 package versioncheck
@@ -433,7 +435,7 @@ func EvaluateVersion(sv *version.Info) *ClusterCompatibility {
 
 ```
 
-Sur un cluster pré-1.37, le plugin envoie un avertissement sur `stderr` et indique `N/A (K8s < 1.37)` dans le tableau sans bloquer l'exécution.
+Sur un cluster pré-1.37, le plugin envoie un avertissement sur **stderr** et indique **N/A (K8s < 1.37)** dans le tableau sans bloquer l'exécution.
 
 ---
 
@@ -515,11 +517,11 @@ $ kubectl pvc-usage -A --unused-only --min-age=30d --sort-by=unused
 
 ## 8. Résumé
 
-L'introduction de la condition `Unused` dans Kubernetes 1.37 apporte une approche déclarative pour suivre le stockage inactif :
+L'introduction de la condition **Unused** dans Kubernetes 1.37 apporte une approche déclarative pour suivre le stockage inactif :
 
-* L'état est directement exposé dans `.status.conditions`.
-* L'horodatage `lastTransitionTime` permet d'automatiser des scripts de purge basés sur la durée d'inactivité réelle.
-* L'utilisation du SDK `cli-runtime` simplifie le développement de plugins Go intégrés à l'écosystème nativement.
+* L'état est directement exposé dans **.status.conditions**.
+* L'horodatage **lastTransitionTime** permet d'automatiser des scripts de purge basés sur la durée d'inactivité réelle.
+* L'utilisation du SDK **cli-runtime** simplifie le développement de plugins Go intégrés à l'écosystème nativement.
 
 Le code source du plugin et ses tests sont disponibles sur GitHub :
 
