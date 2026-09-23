@@ -1,0 +1,14 @@
+# Binaries
+bin/
+dist/
+
+# Backups
+*.bak
+
+# Go build cache & test artifacts
+*.test
+*.out
+
+# OS specific
+.DS_Store
+Thumbs.db

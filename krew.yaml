@@ -1,0 +1,28 @@
+apiVersion: krew.googlecontainertools.github.com/v1alpha2
+kind: Plugin
+metadata:
+  name: pvc-usage
+spec:
+  version: "v0.1.0"
+  homepage: https://github.com/herveleclerc/pvc-usage
+  shortDescription: Identify unused PVCs and reclaim orphaned storage in Kubernetes 1.37+
+  description: |
+    kubectl-pvc-usage is a kubectl plugin designed to detect unused PersistentVolumeClaims.
+    It natively leverages the Kubernetes 1.37 Beta feature PersistentVolumeClaimUnusedSinceTime
+    (KEP-5541) to identify orphaned volumes, compute idle durations, and provide FinOps
+    storage reclamation insights.
+  caveats: |
+    Requires Kubernetes 1.37+ (or 1.36 with feature gate PersistentVolumeClaimUnusedSinceTime enabled)
+    for native Unused condition tracking.
+  platforms:
+  - selector:
+      matchExpressions:
+      - key: os
+        operator: In
+        values:
+        - darwin
+        - linux
+        - windows
+    uri: https://github.com/herveleclerc/pvc-usage/releases/download/v0.1.0/kubectl-pvc-usage_{{ .OS }}_{{ .Arch }}.tar.gz
+    sha256: "REPLACE_WITH_SHA256"
+    bin: kubectl-pvc-usage
