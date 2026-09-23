@@ -11,6 +11,7 @@ import (
 	"github.com/herveleclerc/pvc-usage/pkg/collector"
 	"github.com/herveleclerc/pvc-usage/pkg/printer"
 	"github.com/herveleclerc/pvc-usage/pkg/types"
+	"github.com/herveleclerc/pvc-usage/pkg/versioncheck"
 )
 
 // RootOptions holds configuration and flags for the root command.
@@ -18,16 +19,17 @@ type RootOptions struct {
 	configFlags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 
-	allNamespaces bool
-	unusedOnly    bool
-	inUseOnly     bool
-	minAgeStr     string
-	storageClass  string
-	sortBy        string
-	showPods      bool
-	output        string
-	showSummary   bool
-	noHeaders     bool
+	allNamespaces    bool
+	unusedOnly       bool
+	inUseOnly        bool
+	minAgeStr        string
+	storageClass     string
+	sortBy           string
+	showPods         bool
+	output           string
+	showSummary      bool
+	noHeaders        bool
+	skipVersionCheck bool
 }
 
 // NewRootOptions returns a default RootOptions.
@@ -84,6 +86,7 @@ to identify orphaned volumes, calculate idle time, and help reclaim storage capa
 	cmd.Flags().StringVarP(&o.output, "output", "o", o.output, "Output format: 'table', 'wide', 'json', 'yaml'")
 	cmd.Flags().BoolVar(&o.showSummary, "summary", o.showSummary, "Display FinOps storage summary at end of table output")
 	cmd.Flags().BoolVar(&o.noHeaders, "no-headers", o.noHeaders, "Do not print table header")
+	cmd.Flags().BoolVar(&o.skipVersionCheck, "skip-version-check", false, "Skip Kubernetes server version compatibility check")
 
 	// Subcommands
 	cmd.AddCommand(NewCmdVersion(streams))
@@ -106,6 +109,14 @@ func (o *RootOptions) Run(ctx context.Context) error {
 	client, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
+	}
+
+	// Verify Kubernetes cluster version compatibility with KEP-5541 (Beta in v1.37)
+	if !o.skipVersionCheck {
+		comp, err := versioncheck.CheckServerVersion(client.Discovery())
+		if err == nil && comp.Warning != "" {
+			fmt.Fprintf(o.ErrOut, "Warning: %s\n\n", comp.Warning)
+		}
 	}
 
 	namespace := ""

@@ -377,9 +377,127 @@ spec:
     bin: kubectl-pvc-usage
 ```
 
+### Installer le plugin via Krew directement depuis le dépôt Git
+
+Pas besoin d'attendre des semaines qu'une Pull Request soit fusionnée dans l'index central `krew-index` de Kubernetes SIGs pour tester et distribuer le plugin. Krew supporte nativement l'installation décentralisée à partir d'un fichier manifeste ou d'un index Git dédié.
+
+Voici les méthodes pour installer `kubectl-pvc-usage` via Krew directement depuis le dépôt :
+
+#### Méthode 1 : Installation directe par URL de manifeste
+
+Vous pouvez pointer Krew directement sur le fichier `krew.yaml` publié sur la branche `main` de GitHub :
+
+```bash
+kubectl krew install --manifest=https://raw.githubusercontent.com/herveleclerc/pvc-usage/main/krew.yaml
+```
+
+Krew télécharge l'archive binaire adaptée à votre architecture (ARM64, AMD64, Linux, macOS, Windows), valide l'intégrité du binaire, l'installe dans `~/.krew/bin` et le rend immédiatement disponible sous l'invocation `kubectl pvc-usage`.
+
+#### Méthode 2 : Installation depuis un clone local
+
+Si vous avez cloné le dépôt en local ou compilé une version de développement :
+
+```bash
+git clone https://github.com/herveleclerc/pvc-usage.git
+cd pvc-usage
+kubectl krew install --manifest=krew.yaml
+```
+
+#### Méthode 3 : Ajout d'un index Krew personnalisé (Custom Index)
+
+Krew permet également d'enregistrer des index Git tiers pour gérer les mises à jour automatiques (`kubectl krew upgrade`) :
+
+```bash
+kubectl krew index add herveleclerc https://github.com/herveleclerc/pvc-usage.git
+kubectl krew install herveleclerc/pvc-usage
+```
+
 ---
 
-## 6. Démonstration pratique sur un cluster Kubernetes 1.37
+## 6. Le contrôle de version : est-ce que ça fonctionne sur toutes les versions ?
+
+C'est la question que tout bon ingénieur d'infrastructure doit poser : **est-ce que ce plugin fonctionne sur n'importe quel cluster Kubernetes ?**
+
+La réponse courte est : **non, et c'est tout à fait normal.**
+
+### La réalité des versions du plan de contrôle
+
+Le binaire `kubectl-pvc-usage` lui-même est agnostique côté client et peut être exécuté avec n'importe quelle version récente de `kubectl`. En revanche, les données qu'il exploite dépendent intrinsèquement de ce que le serveur API Kubernetes et le `pvc-protection-controller` sont capables de fournir :
+
+1. **Kubernetes < 1.36** :
+   Le KEP-5541 n'existait pas. Le contrôleur de protection ne connaît pas la condition `Unused`. Tenter de chercher cette condition renvoie inévitablement du vide.
+2. **Kubernetes 1.36 (Alpha)** :
+   La fonctionnalité existe dans le code source mais est désactivée par défaut. Pour que la condition apparaisse, l'administrateur du cluster doit explicitement démarrer le composant `kube-controller-manager` avec l'argument :
+   `--feature-gates="PersistentVolumeClaimUnusedSinceTime=true"`
+3. **Kubernetes 1.37+ (Beta)** :
+   La fonctionnalité passe en Beta et est **activée par défaut**. Dès qu'un cluster 1.37 tourne, chaque PVC Bound reçoit automatiquement la condition `Unused` sans aucune manipulation de configuration.
+
+### Pourquoi un plugin de production doit vérifier la version
+
+Un plugin qui échouerait silencieusement ou afficherait un tableau vierge sans explication sur un cluster Kubernetes 1.34 ou 1.35 engendrerait une fausse impression de sécurité : l'opérateur croirait qu'il n'a aucune PVC orpheline, alors qu'en réalité la métrique est absente !
+
+Pour garantir une observabilité rigoureuse, `kubectl-pvc-usage` intègre un module de vérification préventive (`pkg/versioncheck`). Dès la connexion au cluster, le plugin interroge l'endpoint `/version` de l'API Server via l'interface `Discovery` de `client-go` :
+
+```go
+package versioncheck
+
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/discovery"
+)
+
+type CompatibilityStatus string
+
+const (
+	StatusFullySupported CompatibilityStatus = "FullySupported" // K8s >= 1.37
+	StatusAlphaSupported CompatibilityStatus = "AlphaSupported" // K8s == 1.36
+	StatusUnsupported    CompatibilityStatus = "Unsupported"    // K8s < 1.36
+)
+
+func CheckServerVersion(discoveryClient discovery.ServerVersionInterface) (*ClusterCompatibility, error) {
+	sv, err := discoveryClient.ServerVersion()
+	if err != nil {
+		return nil, fmt.Errorf("impossible de recuperer la version du serveur: %w", err)
+	}
+	return EvaluateVersion(sv), nil
+}
+
+func EvaluateVersion(sv *version.Info) *ClusterCompatibility {
+	comp := &ClusterCompatibility{GitVersion: sv.GitVersion}
+	minor, _ := strconv.Atoi(minorRegex.FindString(sv.Minor))
+	comp.Minor = minor
+
+	switch {
+	case comp.Minor >= 37:
+		comp.Status = StatusFullySupported
+	case comp.Minor == 36:
+		comp.Status = StatusAlphaSupported
+		comp.Warning = fmt.Sprintf("Cluster en version %s (v1.36). 'PersistentVolumeClaimUnusedSinceTime' est en Alpha et necessite le feature gate active sur kube-controller-manager.", sv.GitVersion)
+	default:
+		comp.Status = StatusUnsupported
+		comp.Warning = fmt.Sprintf("Cluster en version %s (v1.%d). La condition 'Unused' requiert Kubernetes >= 1.37 (ou 1.36 avec feature gate). Les PVCs afficheront le statut 'FeatureNotPresent'.", sv.GitVersion, comp.Minor)
+	}
+	return comp
+}
+```
+
+### Le comportement en cas d'incompatibilité
+
+Si vous exécutez le plugin sur un cluster Kubernetes 1.35 :
+- Un message d'avertissement clair est émis sur le canal d'erreur standard (`stderr`), ce qui n'altère pas les pipelines de traitement lisant `stdout`.
+- Dans le tableau, les PVCs sont identifiées avec le statut explicite `FeatureNotPresent` et la colonne `UNUSED-SINCE` indique `N/A (K8s < 1.37)`.
+- La synthèse FinOps finale affiche la ligne :
+  `Missing Unused cond: X (Requires K8s >= 1.37 or KEP-5541 enabled)`.
+- Si nécessaire dans un contexte d'automatisation, le flag `--skip-version-check` permet de désactiver ce diagnostic.
+
+---
+
+## 7. Démonstration pratique sur un cluster Kubernetes 1.37
 
 Voyons le résultat en conditions réelles sur un cluster Kubernetes 1.37.0.
 
@@ -467,7 +585,7 @@ Fini les pipelines de détection fragiles, fini les regex sur des logs de contr�
 
 ---
 
-## 7. Ce qu'il faut retenir
+## 8. Ce qu'il faut retenir
 
 La promotion en Beta de la condition `Unused` dans Kubernetes 1.37 comble un manque historique de l'API de stockage :
 - L'information d'usage est désormais **déclarative**, intégrée nativement dans `.status.conditions`.
@@ -478,3 +596,4 @@ Le code source complet, les tests unitaires et les workflows de compilation sont
 [https://github.com/herveleclerc/pvc-usage](https://github.com/herveleclerc/pvc-usage)
 
 Vous n'avez désormais plus aucune excuse pour laisser les disques orphelins grever votre budget cloud.
+

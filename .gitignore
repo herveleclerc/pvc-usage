@@ -3,7 +3,7 @@ bin/
 dist/
 
 # Backups
-*.bak
+*.bak*
 
 # Go build cache & test artifacts
 *.test
@@ -12,3 +12,4 @@ dist/
 # OS specific
 .DS_Store
 Thumbs.db
+

@@ -58,3 +58,4 @@ jobs:
 
       - name: Compile for all targets
         run: make build-all
+

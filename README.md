@@ -42,9 +42,33 @@ sudo mv kubectl-pvc-usage /usr/local/bin/
 
 ### Via Krew
 
+You can install the plugin via Krew directly using the repository manifest URL:
+
 ```bash
+kubectl krew install --manifest=https://raw.githubusercontent.com/herveleclerc/pvc-usage/main/krew.yaml
+```
+
+Or from a local clone of the repository:
+
+```bash
+git clone https://github.com/herveleclerc/pvc-usage.git
+cd pvc-usage
 kubectl krew install --manifest=krew.yaml
 ```
+
+---
+
+## Kubernetes Compatibility
+
+| Kubernetes Server Version | Support Level | Notes |
+| :--- | :--- | :--- |
+| **v1.37+** | Fully Supported | Beta, enabled by default (KEP-5541) |
+| **v1.36** | Alpha Supported | Requires `--feature-gates="PersistentVolumeClaimUnusedSinceTime=true"` on `kube-controller-manager` |
+| **< v1.36** | Unsupported | Feature does not exist; PVCs will report `FeatureNotPresent` |
+
+The plugin performs a server version compatibility check upon connecting to the cluster. If the cluster is running a version prior to 1.37, an informative warning is printed to `stderr`. You can bypass this check with `--skip-version-check`.
+
+---
 
 ### From Source
 
@@ -133,6 +157,7 @@ Flags:
   -o, --output string          Output format: 'table', 'wide', 'json', 'yaml' (default: "table")
       --summary                Display FinOps storage summary at end of table output (default: true)
       --no-headers             Do not print table header
+      --skip-version-check     Skip Kubernetes server version compatibility check
 
 Standard kubectl flags inherited via cli-runtime:
       --kubeconfig string      Path to the kubeconfig file to use for CLI requests

@@ -26,3 +26,4 @@ spec:
     uri: https://github.com/herveleclerc/pvc-usage/releases/download/v0.1.0/kubectl-pvc-usage_{{ .OS }}_{{ .Arch }}.tar.gz
     sha256: "REPLACE_WITH_SHA256"
     bin: kubectl-pvc-usage
+
