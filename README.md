@@ -42,13 +42,35 @@ sudo mv kubectl-pvc-usage /usr/local/bin/
 
 ### Via Krew
 
-You can install the plugin via Krew directly using the repository manifest URL:
+> [!NOTE]
+> The `kubectl krew install --manifest` flag expects a local file path (`os.Open`). Passing an HTTP URL directly (`--manifest=https://...`) fails with `open https://...: no such file or directory`. Use one of the supported methods below.
+
+#### Method 1: One-liner via Shell Process Substitution (Recommended)
+
+In Zsh or Bash, you can pass the remote manifest directly using process substitution without creating a local file:
 
 ```bash
-kubectl krew install --manifest=https://raw.githubusercontent.com/herveleclerc/pvc-usage/main/krew.yaml
+kubectl krew install --manifest=<(curl -fsSL https://raw.githubusercontent.com/herveleclerc/pvc-usage/main/krew.yaml)
 ```
 
-Or from a local clone of the repository:
+#### Method 2: Download Manifest then Install
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/herveleclerc/pvc-usage/main/krew.yaml
+kubectl krew install --manifest=krew.yaml
+rm -f krew.yaml
+```
+
+#### Method 3: Via Custom Krew Index
+
+You can add this repository as a custom Krew index for automatic upgrades:
+
+```bash
+kubectl krew index add herveleclerc https://github.com/herveleclerc/pvc-usage.git
+kubectl krew install herveleclerc/pvc-usage
+```
+
+#### Method 4: From Local Clone
 
 ```bash
 git clone https://github.com/herveleclerc/pvc-usage.git

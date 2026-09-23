@@ -381,19 +381,27 @@ spec:
 
 Pas besoin d'attendre des semaines qu'une Pull Request soit fusionnée dans l'index central `krew-index` de Kubernetes SIGs pour tester et distribuer le plugin. Krew supporte nativement l'installation décentralisée à partir d'un fichier manifeste ou d'un index Git dédié.
 
-Voici les méthodes pour installer `kubectl-pvc-usage` via Krew directement depuis le dépôt :
+Attention à un piège classique : dans le code de Krew (`cmd/krew/cmd/install.go`), la lecture du manifeste passe par un appel système local `os.Open(manifestFile)`. Taper directement `kubectl krew install --manifest=https://...` échoue donc avec l'erreur `open https://...: no such file or directory` car Krew cherche un fichier local nommé ainsi sur votre disque.
 
-#### Méthode 1 : Installation directe par URL de manifeste
+Voici les méthodes fonctionnelles pour installer `kubectl-pvc-usage` via Krew directement depuis le dépôt :
 
-Vous pouvez pointer Krew directement sur le fichier `krew.yaml` publié sur la branche `main` de GitHub :
+#### Méthode 1 : En une seule ligne via substitution de processus shell (Zsh / Bash)
+
+Le shell télécharge le flux HTTP et le présente à Krew comme un descripteur de fichier local temporaire :
 
 ```bash
-kubectl krew install --manifest=https://raw.githubusercontent.com/herveleclerc/pvc-usage/main/krew.yaml
+kubectl krew install --manifest=<(curl -fsSL https://raw.githubusercontent.com/herveleclerc/pvc-usage/main/krew.yaml)
 ```
 
-Krew télécharge l'archive binaire adaptée à votre architecture (ARM64, AMD64, Linux, macOS, Windows), valide l'intégrité du binaire, l'installe dans `~/.krew/bin` et le rend immédiatement disponible sous l'invocation `kubectl pvc-usage`.
+#### Méthode 2 : Téléchargement direct puis installation
 
-#### Méthode 2 : Installation depuis un clone local
+```bash
+curl -fsSLO https://raw.githubusercontent.com/herveleclerc/pvc-usage/main/krew.yaml
+kubectl krew install --manifest=krew.yaml
+rm -f krew.yaml
+```
+
+#### Méthode 3 : Installation depuis un clone local
 
 Si vous avez cloné le dépôt en local ou compilé une version de développement :
 
@@ -403,7 +411,7 @@ cd pvc-usage
 kubectl krew install --manifest=krew.yaml
 ```
 
-#### Méthode 3 : Ajout d'un index Krew personnalisé (Custom Index)
+#### Méthode 4 : Ajout d'un index Krew personnalisé (Custom Index)
 
 Krew permet également d'enregistrer des index Git tiers pour gérer les mises à jour automatiques (`kubectl krew upgrade`) :
 
