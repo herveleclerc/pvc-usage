@@ -38,6 +38,11 @@ build-all:
 	done; \
 	echo "Multi-arch build completed in ./dist"
 
+package: build-all
+	@chmod +x scripts/package.sh scripts/generate-krew-manifest.sh
+	@./scripts/package.sh "$(VERSION)"
+	@./scripts/generate-krew-manifest.sh "$(VERSION)"
+
 test:
 	go test -v ./...
 

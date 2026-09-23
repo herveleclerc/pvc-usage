@@ -14,10 +14,10 @@ import (
 type CompatibilityStatus string
 
 const (
-	StatusFullySupported   CompatibilityStatus = "FullySupported"   // K8s >= 1.37 (Beta, enabled by default)
-	StatusAlphaSupported   CompatibilityStatus = "AlphaSupported"   // K8s == 1.36 (Alpha, requires feature gate)
-	StatusUnsupported      CompatibilityStatus = "Unsupported"      // K8s < 1.36 (Feature does not exist)
-	StatusUnknown          CompatibilityStatus = "Unknown"
+	StatusFullySupported CompatibilityStatus = "FullySupported" // K8s >= 1.37 (Beta, enabled by default)
+	StatusAlphaSupported CompatibilityStatus = "AlphaSupported" // K8s == 1.36 (Alpha, requires feature gate)
+	StatusUnsupported    CompatibilityStatus = "Unsupported"    // K8s < 1.36 (Feature does not exist)
+	StatusUnknown        CompatibilityStatus = "Unknown"
 )
 
 // ClusterCompatibility holds version details and support assessment.

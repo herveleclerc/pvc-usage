@@ -16,14 +16,37 @@ spec:
     for native Unused condition tracking.
   platforms:
   - selector:
-      matchExpressions:
-      - key: os
-        operator: In
-        values:
-        - darwin
-        - linux
-        - windows
-    uri: https://github.com/herveleclerc/pvc-usage/releases/download/v0.1.0/kubectl-pvc-usage_{{ .OS }}_{{ .Arch }}.tar.gz
-    sha256: "REPLACE_WITH_SHA256"
+      matchLabels:
+        os: darwin
+        arch: amd64
+    uri: https://github.com/herveleclerc/pvc-usage/releases/download/v0.1.0/kubectl-pvc-usage_v0.1.0_darwin_amd64.tar.gz
+    sha256: 94f2cc7701477b24e59595bdddf34166527e1bda982c8a482fe6a0465e1be847
     bin: kubectl-pvc-usage
-
+  - selector:
+      matchLabels:
+        os: darwin
+        arch: arm64
+    uri: https://github.com/herveleclerc/pvc-usage/releases/download/v0.1.0/kubectl-pvc-usage_v0.1.0_darwin_arm64.tar.gz
+    sha256: 329cc1d77dbc2978833dd3e04f10fc4324266e1f16d6452dd178a49fe3983aa9
+    bin: kubectl-pvc-usage
+  - selector:
+      matchLabels:
+        os: linux
+        arch: amd64
+    uri: https://github.com/herveleclerc/pvc-usage/releases/download/v0.1.0/kubectl-pvc-usage_v0.1.0_linux_amd64.tar.gz
+    sha256: 3c6d9213d5bbc98c005590a4267135ecb06d1c1f7bc480116607d95cc7a8650e
+    bin: kubectl-pvc-usage
+  - selector:
+      matchLabels:
+        os: linux
+        arch: arm64
+    uri: https://github.com/herveleclerc/pvc-usage/releases/download/v0.1.0/kubectl-pvc-usage_v0.1.0_linux_arm64.tar.gz
+    sha256: 063c7ce27c71944858a2256ccca0d2d36bab1d7998159e92b51e37e33a4ddb7e
+    bin: kubectl-pvc-usage
+  - selector:
+      matchLabels:
+        os: windows
+        arch: amd64
+    uri: https://github.com/herveleclerc/pvc-usage/releases/download/v0.1.0/kubectl-pvc-usage_v0.1.0_windows_amd64.zip
+    sha256: 093e6f403687d7eafc2a82de500de5e97bad623d3ef672bc8071ced3fd4419f3
+    bin: kubectl-pvc-usage.exe
